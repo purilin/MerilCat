@@ -1,9 +1,4 @@
-use meril_cat::{
-    bot::MerilBot,
-    core::api::NapcatApi,
-    core::event::EventManager,
-    utils::parser::{event_parser::message_event::PrivateMessageEvent, message_parser::Messages},
-};
+use meril_cat::prelude::{EventManager, MerilBot, Messages, NapcatApi};
 #[tokio::main]
 async fn main() {
     let bot = MerilBot::init();
