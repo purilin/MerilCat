@@ -2,8 +2,7 @@ use std::{
     pin::Pin,
     sync::{Arc, OnceLock},
 };
-use tokio::select;
-use tokio::sync::Mutex;
+use tokio::{select, sync::RwLock};
 
 use crate::utils::{
     channels::WebSocketSessionManager,
@@ -26,16 +25,16 @@ pub mod func_types {
 
 pub struct EventManager {
     ws_ssmanager: WebSocketSessionManager,
-    private_msg_event_pool: Mutex<Vec<func_types::PrivateMessageFunction>>,
-    group_msg_event_pool: Mutex<Vec<func_types::GroupMessageFunction>>,
+    private_msg_event_pool: RwLock<Vec<func_types::PrivateMessageFunction>>,
+    group_msg_event_pool: RwLock<Vec<func_types::GroupMessageFunction>>,
 }
 static INSTANCE: OnceLock<EventManager> = OnceLock::new();
 impl EventManager {
     fn new(ws_session_manager: WebSocketSessionManager) -> Self {
         Self {
             ws_ssmanager: ws_session_manager,
-            private_msg_event_pool: Mutex::new(Vec::new()),
-            group_msg_event_pool: Mutex::new(Vec::new()),
+            private_msg_event_pool: RwLock::new(Vec::new()),
+            group_msg_event_pool: RwLock::new(Vec::new()),
         }
     }
     pub fn init(ws_session_manager: WebSocketSessionManager) -> &'static Self {
@@ -56,7 +55,7 @@ impl EventManager {
     {
         let boxed_func =
             Arc::new(move |msg| Box::pin(func(msg)) as Pin<Box<dyn Future<Output = ()> + Send>>);
-        let mut mut_msgpool = self.private_msg_event_pool.lock().await;
+        let mut mut_msgpool = self.private_msg_event_pool.write().await;
         mut_msgpool.push(boxed_func);
     }
 
@@ -70,7 +69,7 @@ impl EventManager {
     {
         let boxed_func =
             Arc::new(move |msg| Box::pin(func(msg)) as Pin<Box<dyn Future<Output = ()> + Send>>);
-        let mut mut_msgpool = self.group_msg_event_pool.lock().await;
+        let mut mut_msgpool = self.group_msg_event_pool.write().await;
         mut_msgpool.push(boxed_func);
     }
 
@@ -84,7 +83,7 @@ impl EventManager {
                                 match type_msg {
                                     MessageEvent::Group(msg)=> {
                                         println!("[group={}]{}({}): {}",msg.group_id ,msg.sender.nickname, msg.sender.user_id, msg.raw_message);
-                                        let group_msg_pool = {let pool = self.group_msg_event_pool.lock().await; pool.clone() };
+                                        let group_msg_pool = self.group_msg_event_pool.read().await;
                                         for func in group_msg_pool.iter() {
                                             let fut = func(msg.clone());
                                             tokio::spawn(fut);
@@ -92,7 +91,7 @@ impl EventManager {
                                     },
                                     MessageEvent::Private(msg) => {
                                         println!("[private]{}({}): {}", msg.sender.nickname, msg.sender.user_id, msg.raw_message);
-                                        let private_msg_pool = {let pool = self.private_msg_event_pool.lock().await; pool.clone()};
+                                        let private_msg_pool = self.private_msg_event_pool.read().await;
                                         for func in private_msg_pool.iter() {
                                             let fut = func(msg.clone());
                                             tokio::spawn(fut);
@@ -111,7 +110,7 @@ impl EventManager {
                                 }
                             },
                             Ok(AnyEvent::Other) => {
-                                println!("Other Event");
+                                println!("[Other Event] \n{}\n", msg_str);
                             },
                             Err(_) => {
                                 println!("\n[Parser Event Error!] \n{} \n",msg_str);

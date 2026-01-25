@@ -1,4 +1,4 @@
-use crate::utils::parser::message_parser::Messages;
+use crate::utils::parser::message_parser::Message;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[derive(Serialize, Deserialize, Clone)]
@@ -11,17 +11,17 @@ pub struct NapcatRequestData {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PrivateMessage {
     user_id: String,
-    message: Messages,
+    message: Message,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct GroupMessage {
     group_id: String,
-    message: Messages,
+    message: Message,
 }
 
 impl PrivateMessage {
-    pub fn new(user_id: impl ToString, message: Messages) -> Self {
+    pub fn new(user_id: impl ToString, message: Message) -> Self {
         Self {
             user_id: user_id.to_string(),
             message,
@@ -30,7 +30,7 @@ impl PrivateMessage {
 }
 
 impl GroupMessage {
-    pub fn new(group_id: impl Into<String>, message: Messages) -> Self {
+    pub fn new(group_id: impl Into<String>, message: Message) -> Self {
         Self {
             group_id: group_id.into(),
             message,

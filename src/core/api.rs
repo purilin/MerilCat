@@ -1,6 +1,6 @@
 use crate::utils::channels::WebSocketSessionManager;
 use crate::utils::parser::{
-    message_parser::Messages,
+    message_parser::Message,
     request_parser::{NapcatRequestData, PrivateMessage},
 };
 use std::sync::OnceLock;
@@ -28,8 +28,8 @@ impl NapcatApi {
         self.ws_ssmanager.send(text_json);
     }
 
-    pub async fn send_private_message(&self, user_id: i64, msg: Messages) {
-        let private_msg = PrivateMessage::new(user_id, msg);
+    pub async fn send_private_message(&self, user_id: i64, message: Message) {
+        let private_msg = PrivateMessage::new(user_id, message);
         let json_value = serde_json::to_value(private_msg).unwrap();
         let act = "send_private_msg";
         let data = NapcatRequestData::new()

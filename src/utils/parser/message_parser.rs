@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(transparent)]
-pub struct Messages {
+pub struct Message {
     message: Vec<MessageSegment>,
 }
 
-impl Messages {
+impl Message {
     pub fn new() -> Self {
         Self {
             message: Vec::new(),

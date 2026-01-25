@@ -1,10 +1,12 @@
 use crate::core::api::NapcatApi;
 use crate::core::client::NapcatClient;
 use crate::core::event::EventManager;
+use crate::plugin::PluginManager;
 use crate::utils::channels::{WebSocketMessageBus, WebSocketSessionManager};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{Mutex, broadcast, mpsc};
 pub struct MerilBot {
     ws_session_manager: WebSocketSessionManager,
     client: NapcatClient,
@@ -31,8 +33,11 @@ impl MerilBot {
         {
             let event_manager = EventManager::init(arc_self.get_ssmanager());
             tokio::spawn(async move { event_manager.handle_event().await });
+            PluginManager::init();
+            tokio::spawn(async move { PluginManager::reg_init().await });
 
             let _ = NapcatApi::init(arc_self.get_ssmanager());
+            let _ = crate::config::GlobalState.get_or_init(|| Mutex::new(HashMap::new()));
         };
         INSTANCE.get().unwrap()
     }

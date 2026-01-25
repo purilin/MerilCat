@@ -3,7 +3,7 @@ pub use crate::{
     core::api::NapcatApi,
     core::event::EventManager,
     utils::parser::{
-        message_parser::Messages,
+        message_parser::Message,
         request_parser::{GroupMessage, NapcatRequestData, PrivateMessage},
     },
 };
