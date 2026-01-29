@@ -1,152 +1,85 @@
-use std::sync::{Arc, OnceLock};
+use crate::{
+    core::event::EventNexus,
+    prelude::{ActionManager, Message},
+    types::plugin_type::{BasePlugin, Plugin, Trigger},
+};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{
-    core::event::EventManager,
-    prelude::{Message, NapcatApi},
-    utils::parser::event_parser::message_event::{GroupMessageEvent, PrivateMessageEvent},
-};
 pub struct PluginManager {
-    plugins: Arc<RwLock<Vec<Plugin>>>,
+    plugins: RwLock<Vec<Arc<Plugin>>>,
+    act: Arc<ActionManager>,
+    event_nexus: Arc<EventNexus>,
 }
 
-#[derive(Clone)]
-pub struct Plugin {
-    name: String,
-    introduction: String,
-    command: String,
-}
-
-static INSTANCE: OnceLock<PluginManager> = OnceLock::new();
 impl PluginManager {
-    fn new() -> Self {
-        Self {
-            plugins: Arc::new(RwLock::new(Vec::new())),
+    pub fn new(act: Arc<ActionManager>, event_nexus: Arc<EventNexus>) -> Arc<Self> {
+        Arc::new(PluginManager {
+            plugins: RwLock::new(Vec::new()),
+            act,
+            event_nexus,
+        })
+    }
+
+    async fn handle_plugin(self: Arc<Self>) {
+        tracing::info!(
+            "[插件加载] [数量: {}] 加载中...",
+            self.plugins.read().await.len()
+        );
+        let plugins_arc = self.plugins.read().await.clone();
+        for plugin in plugins_arc {
+            let arc_plugin = plugin.clone();
+            let event_nexus = self.event_nexus.clone();
+            let act = self.act.clone();
+            tokio::spawn(async move {
+                arc_plugin
+                    .clone()
+                    .on_load(event_nexus.clone(), act.clone())
+                    .await;
+                arc_plugin
+                    .clone()
+                    .on_update(event_nexus.clone(), act.clone())
+                    .await;
+            });
         }
     }
 
-    pub fn init() -> &'static Self {
-        INSTANCE.get_or_init(|| Self::new())
+    pub async fn add_plugin(self: Arc<Self>, plugin: Plugin) {
+        let arc_self = self.clone();
+        arc_self.plugins.write().await.push(Arc::new(plugin));
     }
 
-    pub async fn reg_init() {
-        Plugin::new("GetHelp")
-            .with_command("/help")
-            .with_introduction("Get PluginList")
-            .reg_private_plugin(Self::plugin_help)
-            .await;
-    }
+    async fn get_plugin_info(self: Arc<Self>) -> String {
+        let plugins = self.clone().plugins.read().await.clone();
 
-    pub fn get() -> &'static Self {
-        INSTANCE.get().unwrap()
-    }
-
-    async fn plugin_help(msg: PrivateMessageEvent) {
-        let mut res_str = String::new();
-        let plugins = PluginManager::get().plugins.clone();
-        for plugin in plugins.read().await.iter() {
-            let cur_str = format!("{}\n", plugin.to_text());
-            res_str.push_str(&cur_str);
+        let mut help_str = String::from(">插件列表\n");
+        for plugin in plugins {
+            help_str.push_str(&format!("{}\n\n", plugin.get_info_str()));
         }
-        let message = Message::new().with_text(res_str);
-        NapcatApi::get()
-            .send_private_message(msg.sender.user_id, message)
-            .await;
+        help_str = help_str.trim().to_string();
+        help_str.push_str("\n--->--->");
+        help_str
     }
 
-    pub async fn add_plugin(&self, plugin: Plugin) {
-        println!("Registing plugin:{}", plugin.name);
-        let mut mng = self.plugins.write().await;
-        println!("Registed plugin:{}", plugin.name);
-        mng.push(plugin);
-    }
-}
-
-impl Plugin {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            introduction: "I am Lazy!".into(),
-            command: "None".into(),
-        }
-    }
-
-    pub fn to_text(&self) -> String {
-        format!(
-            "[{}]\n> {}\n> {}",
-            self.name, self.command, self.introduction
-        )
-        .trim()
-        .to_string()
-    }
-
-    /// command == "Any": *
-    /// command == "None": None
-    /// command == "/help": start_with("/help")
-    #[must_use]
-    pub fn with_command(mut self, command: impl Into<String>) -> Self {
-        self.command = command.into();
-        self
-    }
-
-    pub fn with_introduction(mut self, inttroduction: impl Into<String>) -> Self {
-        self.introduction = inttroduction.into();
-        self
-    }
-
-    pub async fn reg_private_plugin<F, Fut>(self, func: F)
-    where
-        F: Fn(crate::utils::parser::event_parser::message_event::PrivateMessageEvent) -> Fut
-            + Send
-            + Sync
-            + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        let arc_func = Arc::new(func);
-        let event = EventManager::get();
-        let command_str = self.command.clone();
-        event
-            .reg_private_event(move |msg| {
-                let arc_func_c = arc_func.clone();
-                let command_str_c = command_str.clone();
+    pub async fn run(self: Arc<Self>) {
+        let self_for_help_plugin = self.clone();
+        let help_plugin = Plugin::new()
+            .with_name("Get Help")
+            .with_author("purilin")
+            .with_description("/help")
+            .with_trigger(Trigger::StartWith("/help".to_string()))
+            .with_on_private_message_func(move |msg, act| {
+                let cloned_self = self_for_help_plugin.clone();
                 async move {
-                    if command_str_c == "Any" {
-                        arc_func_c(msg).await;
-                    } else if command_str_c == "None" {
-                    } else if msg.raw_message.starts_with(&command_str_c) {
-                        arc_func_c(msg).await;
-                    }
+                    let help_info_cloned = cloned_self.clone().get_plugin_info().await;
+                    act.send_private_message(
+                        msg.sender.user_id,
+                        Message::new().with_text(help_info_cloned),
+                    )
+                    .await;
                 }
-            })
-            .await;
-        PluginManager::get().add_plugin(self).await;
-    }
-
-    pub async fn reg_group_plugin<F, Fut>(self, func: F)
-    where
-        F: Fn(crate::utils::parser::event_parser::message_event::GroupMessageEvent) -> Fut
-            + Send
-            + Sync
-            + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        let arc_func = Arc::new(func);
-        let event = EventManager::get();
-        let command_str = self.command.clone();
-        event
-            .reg_group_event(move |msg| {
-                let arc_func_c = arc_func.clone();
-                let command_str_c = command_str.clone();
-                async move {
-                    if command_str_c == "Any" {
-                        arc_func_c(msg).await;
-                    } else if command_str_c == "None" {
-                    } else if msg.raw_message.starts_with(&command_str_c) {
-                        arc_func_c(msg).await;
-                    }
-                }
-            })
-            .await;
-        PluginManager::get().add_plugin(self).await;
+            });
+        self.clone().add_plugin(help_plugin).await;
+        tokio::spawn(self.clone().handle_plugin());
     }
 }

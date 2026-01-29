@@ -1,59 +1,41 @@
-use crate::core::api::NapcatApi;
-use crate::core::client::NapcatClient;
-use crate::core::event::EventManager;
-use crate::plugin::PluginManager;
-use crate::utils::channels::{WebSocketMessageBus, WebSocketSessionManager};
-use std::collections::HashMap;
+use crate::{
+    core::{adapter::NapcatAdapter, event::EventManager},
+    plugin::PluginManager,
+    prelude::ActionManager,
+};
 use std::sync::Arc;
-use std::sync::OnceLock;
-use tokio::sync::{Mutex, broadcast, mpsc};
 pub struct MerilBot {
-    ws_session_manager: WebSocketSessionManager,
-    client: NapcatClient,
+    pub adapter: Arc<NapcatAdapter>,
+    pub event: Arc<EventManager>,
+    pub action: Arc<ActionManager>,
+    pub plugin: Arc<PluginManager>,
 }
 
-static INSTANCE: OnceLock<Arc<MerilBot>> = OnceLock::new();
 impl MerilBot {
-    fn new() -> Self {
-        let (mpsc_tx, mpsc_rx) = mpsc::unbounded_channel::<String>();
-        let (broadcast_tx, broadcast_rx) = broadcast::channel(256);
-        let ws_bus = WebSocketMessageBus::new(broadcast_tx, mpsc_rx);
-        let ws_ssm = WebSocketSessionManager::new(mpsc_tx, broadcast_rx);
-
+    pub fn new() -> Self {
+        tracing_subscriber::fmt::init();
+        let adapter = NapcatAdapter::new();
+        let event = EventManager::new(adapter.clone().get_event_port());
+        let action = ActionManager::new(adapter.clone().get_action_port());
+        let plugin = PluginManager::new(action.clone(), event.get_event_nexus());
         Self {
-            ws_session_manager: ws_ssm,
-            client: NapcatClient::new(ws_bus),
+            event,
+            adapter,
+            action,
+            plugin,
         }
     }
 
-    pub fn init() -> &'static Arc<MerilBot> {
-        let arc_self = INSTANCE.get_or_init(|| Arc::new(MerilBot::new()));
-
-        //init
-        {
-            let event_manager = EventManager::init(arc_self.get_ssmanager());
-            tokio::spawn(async move { event_manager.handle_event().await });
-            PluginManager::init();
-            tokio::spawn(async move { PluginManager::reg_init().await });
-
-            let _ = NapcatApi::init(arc_self.get_ssmanager());
-            let _ = crate::config::GlobalState.get_or_init(|| Mutex::new(HashMap::new()));
-        };
-        INSTANCE.get().unwrap()
-    }
-
-    pub fn get() -> &'static Arc<MerilBot> {
-        INSTANCE.get().unwrap()
-    }
-
-    pub fn get_ssmanager(&self) -> WebSocketSessionManager {
-        WebSocketSessionManager::new(
-            self.ws_session_manager.get_sender(),
-            self.client.get_receiver(),
-        )
-    }
-
     pub async fn run(&self) {
-        self.client.connect().await;
+        self.adapter.clone().run();
+        self.event.clone().run();
+        self.plugin.clone().run().await;
+        let () = std::future::pending().await;
+    }
+}
+
+impl Default for MerilBot {
+    fn default() -> Self {
+        Self::new()
     }
 }

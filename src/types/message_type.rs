@@ -20,8 +20,8 @@ impl Message {
     }
 
     /// AT 某人
-    pub fn with_at(mut self, qq: impl Into<String>) -> Self {
-        self.message.push(MessageSegment::At { qq: qq.into() });
+    pub fn with_at(mut self, id: i64) -> Self {
+        self.message.push(MessageSegment::At { qq: id });
         self
     }
 
@@ -33,14 +33,16 @@ impl Message {
     }
 
     /// 发送表情
-    pub fn with_face(mut self, id: i32) -> Self {
-        self.message.push(MessageSegment::Face { id });
+    pub fn with_face(mut self, id: impl Into<String>) -> Self {
+        self.message.push(MessageSegment::Face { id: id.into() });
         self
     }
 
     /// 回复某条消息
-    pub fn with_reply(mut self, message_id: i32) -> Self {
-        self.message.push(MessageSegment::Reply { id: message_id });
+    pub fn with_reply(mut self, message_id: impl Into<String>) -> Self {
+        self.message.push(MessageSegment::Reply {
+            id: message_id.into(),
+        });
         self
     }
 
@@ -78,6 +80,12 @@ impl Message {
     }
 }
 
+impl Default for Message {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
 pub enum MessageSegment {
@@ -85,13 +93,13 @@ pub enum MessageSegment {
     Text { text: String },
 
     #[serde(rename = "at")]
-    At { qq: String },
+    At { qq: i64 },
 
     #[serde(rename = "image")]
     Image { file: String },
 
     #[serde(rename = "face")]
-    Face { id: i32 },
+    Face { id: String },
 
     #[serde(rename = "json")]
     Json { data: String },
@@ -103,7 +111,7 @@ pub enum MessageSegment {
     Video { file: String },
 
     #[serde(rename = "reply")]
-    Reply { id: i32 },
+    Reply { id: String },
 
     #[serde(rename = "dice")]
     Dice {},

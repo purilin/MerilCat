@@ -1,3 +1,3 @@
-pub mod api;
-pub mod client;
+pub mod action;
+pub mod adapter;
 pub mod event;

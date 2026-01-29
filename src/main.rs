@@ -1,17 +1,6 @@
-use meril_cat::prelude::{EventManager, MerilBot, Message, NapcatApi};
+use meril_cat::prelude::MerilBot;
 #[tokio::main]
 async fn main() {
-    let bot = MerilBot::init();
-    let api = NapcatApi::get();
-    let event = EventManager::get();
-    event
-        .reg_private_event(move |msg| async move {
-            let user_id = msg.sender.user_id;
-            if msg.raw_message.starts_with("/t") {
-                let message = Message::new().with_text("hello world");
-                api.send_private_message(user_id, message).await;
-            }
-        })
-        .await;
+    let bot = MerilBot::new();
     bot.run().await;
 }

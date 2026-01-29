@@ -1,9 +1,6 @@
 pub use crate::{
     bot::MerilBot,
-    core::api::NapcatApi,
+    core::action::ActionManager,
     core::event::EventManager,
-    utils::parser::{
-        message_parser::Message,
-        request_parser::{GroupMessage, NapcatRequestData, PrivateMessage},
-    },
+    types::{action_type::NapcatRequestData, message_type::Message},
 };
