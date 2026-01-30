@@ -8,7 +8,9 @@
     2. 配置Napcat
         启用并开放 Napcat WebSocket客户端。(默认 localhost:3000/ws)
     3. 安装 rustup
-        >  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        ```
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        ```
 *  启动
     ```
     git clone https://github.com/purilin/MerilCat.git
