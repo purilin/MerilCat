@@ -29,6 +29,7 @@ impl MerilBot {
     pub async fn run(&self) {
         self.adapter.clone().run();
         self.event.clone().run();
+        self.action.clone().run();
         self.plugin.clone().run().await;
         let () = std::future::pending().await;
     }

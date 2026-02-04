@@ -71,62 +71,44 @@ impl NapcatAdapter {
         loop {
             tokio::select! {
                 res = ws.recv() => {
-                    let response  = if let Some(response) = res {
-                        response
-                    } else {
-                        continue
-                    };
-
-                    let message = match response {
-                        Ok(msg) => msg,
-                        Err(e) => {
-                            tracing::warn!("[接收] 网络读取异常 {}", e);
+                    let response = res.and_then(|opt| {opt.ok()});
+                    let Some(response) = response else {
+                            tracing::warn!("[接收] 网络读取异常");
                             continue;
-                        }
                     };
 
-                    let res_str = if let Ok(res_str) = message.to_text() {
-                        res_str
-                    } else{
+                    let Ok(response) = response.to_text() else{
                         tracing::warn!("[数据跳过] 可能接受了非文本类型");
                         continue
                     };
 
-                    let res_value: Value = if let Ok(res_value)= serde_json::from_str(res_str) {
-                        res_value
-                    } else {
-                        tracing::warn!("[数据异常] 转化Value失败: {}", res_str);
+                    let Ok(value) = serde_json::from_str::<serde_json::Value>(response) else {
+                        tracing::warn!("[数据异常] 转化Value失败: {}", response);
                         continue;
                     };
 
-                    if res_value.get("echo").is_some() {
-                        let _ = ws_action_hub.send(res_value);
+                    if value.get("echo").is_some() {
+                        let _ = ws_action_hub.send(value);
                     } else {
-                        let _ = ws_event_hub.send(res_value);
+                        let _ = ws_event_hub.send(value);
                     }
                 },
                 res = ws_event_hub.recv() => {
-                    let res_value = if let Some(res_value) = res {
-                        res_value
-                    } else {
+                    let Some(response) = res else {
                         continue;
                     };
-                    let res_str = if let Some(res_str) = res_value.as_str() {
-                        res_str
-                    } else {
+                    let Some(response) = response.as_str() else {
                         continue;
                     };
-                    let msg = Message::Text(res_str.into());
+                    let msg = Message::Text(response.into());
                     let _ = ws.send(msg).await;
                 },
                 res = ws_action_hub.recv() => {
-                    let res_value = if let Some(res_value) = res {
-                        res_value
-                    } else {
+                    let Some(response) = res else {
                         continue;
                     };
-                    let res_str = res_value.to_string();
-                    let msg = Message::Text(res_str.into());
+                    let response = response.to_string();
+                    let msg = Message::Text(response.into());
                     let _ = ws.send(msg).await;
                 }
             }

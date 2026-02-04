@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1.89"
 axum = { version = "0.8.8", features = ["ws"] }
+dashmap = "6.1.0"
 getset = "0.1.6"
 regex = "1.12.2"
 reqwest = "0.13.1"
