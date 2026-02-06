@@ -1,5 +1,7 @@
 use crate::{
+    config::Config,
     core::event::EventNexus,
+    plugins::ai_chat::AiChatPlugin,
     prelude::{ActionManager, Message, PrivateMessageEvent},
     types::plugin_type::{BasePlugin, PluginWrapper},
 };
@@ -44,7 +46,13 @@ impl PluginManager {
         let help_plugin = PluginWrapper::new(HelpPlugin::new(self.plugins.clone()))
             .with_name("GetHelpList")
             .with_description("/help");
+        let deepseek_token = Config::get_or_init().ai_deepseek_token();
+        println!("{deepseek_token}");
+        let ai_chat_plugin = PluginWrapper::new(AiChatPlugin::new(deepseek_token))
+            .with_name("Ai Chat In QQ")
+            .with_description("Any Triggle");
         self.clone().add_plugin(help_plugin).await;
+        self.clone().add_plugin(ai_chat_plugin).await;
         tokio::spawn(self.clone().handle_plugin());
     }
 }

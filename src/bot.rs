@@ -1,6 +1,5 @@
 use crate::{
-    core::{adapter::NapcatAdapter, event::EventManager},
-    plugin::PluginManager,
+    core::{adapter::NapcatAdapter, event::EventManager, plugin::PluginManager},
     prelude::ActionManager,
 };
 use std::sync::Arc;

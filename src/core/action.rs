@@ -42,7 +42,8 @@ impl ActionManager {
         let _ = self.ws_port.send(value.clone());
         let (tx, rx) = oneshot::channel::<Value>();
         self.pending_requestions.insert(key.to_string(), tx);
-        let Ok(Ok(res)) = time::timeout(time::Duration::from_secs(3), rx).await else {
+        let Ok(Ok(res)) = time::timeout(time::Duration::from_secs(10), rx).await else {
+            tracing::warn!("[TimeOutError] ActionTimeOut");
             return Err(());
         };
         Ok(res)
