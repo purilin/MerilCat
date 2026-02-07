@@ -17,7 +17,7 @@ pub struct AiChatPlugin {
     pub token: String,
     client: deepseek::Client,
     session: Arc<DashMap<String, Arc<RwLock<UserChatState>>>>,
-    system_prompts: DashMap<String, String>,
+    system_prompt: String,
     max_histories: usize,
 }
 
@@ -28,7 +28,11 @@ impl AiChatPlugin {
             token: token.clone(),
             client: deepseek::Client::new(token).unwrap(),
             session: Arc::new(DashMap::new()),
-            system_prompts: DashMap::new(),
+            system_prompt: String::from("
+                    你是一个混迹 QQ 群 10 年的老油条，和用户是那种可以互相开玩笑、甚至互相嫌弃的铁哥们。
+                    你的记忆是有限的。如果你对某些细节感到模糊，可以大方地表达疑惑，或者根据你对用户的固有印象进行推测，不要试图表现得像一个完美的数据库。
+                    你的朋友对话的格式为name: 网名, message:对话内容。 你不需要遵守这些格式主需内容。
+                "),
             max_histories: 30,
         }
     }
@@ -42,29 +46,13 @@ impl AiChatPlugin {
         user_state.clone()
     }
 
-    pub async fn add_personal(&mut self, personal_name: String, prompt: String) {
-        self.system_prompts.insert(personal_name, prompt);
-    }
-
-    pub async fn read_personal_name_list(&self) -> Vec<String> {
-        let mut name_list: Vec<String> = Vec::new();
-        for prompt in self.system_prompts.clone() {
-            name_list.push(prompt.0.clone());
-        }
-        name_list
-    }
-
-    pub async fn clear_history(&mut self, user_id: String) {
-        self.get_user_state_by_id(user_id)
-            .write()
-            .await
-            .history
-            .clear();
-    }
-
     pub async fn chat(&self, user_id: String, msg: rig::message::Message) -> String {
         let user_state = self.get_user_state_by_id(user_id);
-        let llm = self.client.agent(DEEPSEEK_CHAT).build();
+        let llm = self
+            .client
+            .agent(DEEPSEEK_CHAT)
+            .preamble(format!("{}", self.system_prompt).as_str())
+            .build();
         let history: Vec<rig::message::Message>;
         {
             history = user_state.clone().read().await.history.clone();
@@ -94,10 +82,15 @@ impl AiChatPlugin {
         let response = self
             .chat(
                 msg.sender.user_id.to_string(),
-                rig::message::Message::user(msg.raw_message.clone()),
+                rig::message::Message::user(format!(
+                    "name:{}, message:{}",
+                    msg.sender.nickname.clone(),
+                    msg.raw_message.clone()
+                )),
             )
             .await;
-        act.send_private_message(msg.sender.user_id, Message::new().with_text(response))
+        let _ = act
+            .send_private_message(msg.sender.user_id, Message::new().with_text(response))
             .await;
     }
 }
@@ -110,8 +103,9 @@ impl BasePlugin for AiChatPlugin {
             return;
         };
 
-        if !private_message.raw_message.starts_with("/") && !self.token.is_empty() {
-            self.on_private_message(private_message, act).await;
+        if !private_message.clone().raw_message.starts_with("/") && !self.token.is_empty() {
+            self.on_private_message(private_message.clone(), act.clone())
+                .await;
         }
     }
     async fn on_unload(self: Arc<Self>) {}
@@ -121,7 +115,6 @@ impl BasePlugin for AiChatPlugin {
 struct UserChatState {
     pub user_id: String,
     pub history: Vec<rig::message::Message>,
-    pub current_personal: String,
 }
 
 impl UserChatState {
@@ -129,7 +122,6 @@ impl UserChatState {
         Self {
             user_id: user_id.into(),
             history: Vec::new(),
-            current_personal: "你是一个有用的助手".to_string(),
         }
     }
 }

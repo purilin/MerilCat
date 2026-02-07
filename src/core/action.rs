@@ -24,7 +24,7 @@ impl ActionManager {
         })
     }
 
-    pub async fn request(&self, data: NapcatRequestData) -> std::result::Result<Value, ()> {
+    pub async fn request(&self, data: NapcatRequestData) -> Result<Value, &str> {
         let key = self
             .pending_atomic
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -32,7 +32,7 @@ impl ActionManager {
         let value = if let Ok(value) = serde_json::to_value(&data) {
             value
         } else {
-            return Err(());
+            return Err("Serde Error");
         };
         tracing::info!(
             "<<[{}] {}",
@@ -44,55 +44,69 @@ impl ActionManager {
         self.pending_requestions.insert(key.to_string(), tx);
         let Ok(Ok(res)) = time::timeout(time::Duration::from_secs(10), rx).await else {
             tracing::warn!("[TimeOutError] ActionTimeOut");
-            return Err(());
+            return Err("Time Out Error");
         };
         Ok(res)
     }
 
-    pub async fn send_private_message(&self, user_id: i64, message: Message) {
+    pub async fn send_private_message(
+        &self,
+        user_id: i64,
+        message: Message,
+    ) -> Result<Value, &str> {
         let value = json!({
             "user_id": user_id,
             "message": message
         });
         let act = "send_private_msg";
         let data = NapcatRequestData::new().with_action(act).with_params(value);
-        let _ = self.request(data).await;
+        self.request(data).await
     }
 
-    pub async fn send_group_message(&self, group_id: i64, message: Message) {
+    pub async fn send_group_message(&self, group_id: i64, message: Message) -> Result<Value, &str> {
         let value = json!({
             "group_id": group_id,
             "message": message
         });
         let act = "send_group_msg";
         let data = NapcatRequestData::new().with_action(act).with_params(value);
-        let _ = self.request(data).await;
+        self.request(data).await
     }
 
-    pub async fn send_like(&self, user_id: i64, times: i32) -> String {
+    pub async fn send_like(&self, user_id: i64, times: i32) -> Result<String, &str> {
         let value = json!({
             "user_id": user_id,
             "times": times
         });
         let act = "send_like";
         let data = NapcatRequestData::new().with_action(act).with_params(value);
-        let res_value = if let Ok(res) = self.request(data).await {
-            res
-        } else {
-            return "Err".to_string();
-        };
-        let res_message = if let Some(res) = res_value.get("message") {
-            res.as_str()
-        } else {
-            return "Errr".to_string();
-        };
-        if let Some(res) = res_message {
-            Some(res.to_string())
-                .filter(|x| !x.is_empty())
-                .unwrap_or("sb".to_string())
-        } else {
-            "Errrr".to_string()
-        }
+        let message = self.request(data).await.ok().and_then(|value| {
+            value
+                .get("message")
+                .and_then(|message| message.get("message"))
+                .and_then(|message| message.as_str())
+                .map(|message| message.to_string())
+        });
+        message.ok_or("Send Like Error.")
+    }
+
+    pub async fn send_private_poke(&self, user_id: i64) -> Result<Value, &str> {
+        let act = "friend_poke";
+        let value = json!({
+            "user_id": user_id,
+        });
+        let data = NapcatRequestData::new().with_action(act).with_params(value);
+        self.request(data).await
+    }
+
+    pub async fn send_group_poke(&self, group_id: i64, user_id: i64) -> Result<Value, &str> {
+        let act = "group_poke";
+        let value = json!({
+            "user_id": user_id,
+            "group_id": group_id,
+        });
+        let data = NapcatRequestData::new().with_action(act).with_params(value);
+        self.request(data).await
     }
 
     pub fn run(self: Arc<Self>) {

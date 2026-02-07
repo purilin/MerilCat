@@ -22,14 +22,16 @@ impl EventManager {
         })
     }
 
-    async fn handle_event(&self) {
-        let res_value = self.ws_port.recv().await.unwrap();
+    async fn handle_event(&self) -> Result<(), &str> {
+        let Ok(res_value) = self.ws_port.recv().await else {
+            return Err("Event Receive Error.");
+        };
         let any_event_res = serde_json::from_value::<AnyEvent>(res_value.clone());
         let any_event = match any_event_res {
             Ok(message) => message,
             Err(e) => {
                 tracing::warn!("[数据异常] 数据解析异常 {}, {}", e, res_value);
-                return;
+                return Err("Serde Error");
             }
         };
         let _ = self.hubs.all_event_hub.send(any_event.clone());
@@ -81,10 +83,14 @@ impl EventManager {
                 }
             }
             AnyEvent::Other => {
-                let pretty_str = serde_json::to_string_pretty(&res_value.clone()).unwrap();
+                let Ok(pretty_str) = serde_json::to_string_pretty(&res_value.clone()) else {
+                    tracing::warn!("[To Pretty String Error] {}", res_value);
+                    return Err("Serde Error.");
+                };
                 tracing::info!("\n[UndefineEvent]\n{}\n", pretty_str);
             }
         }
+        Ok(())
     }
 
     pub fn get_event_nexus(&self) -> Arc<EventNexus> {
@@ -95,7 +101,7 @@ impl EventManager {
         let arc_self = self.clone();
         let fut = async move {
             loop {
-                arc_self.clone().handle_event().await;
+                let _ = arc_self.clone().handle_event().await;
             }
         };
         tokio::spawn(fut);
