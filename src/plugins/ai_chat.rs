@@ -300,8 +300,12 @@ impl BasePlugin for AiChatPlugin {
         tokio::select! {
             Ok(private_message) = private_port.recv() => {
                 if !private_message.clone().raw_message.starts_with("/") && !self.token.is_empty() {
-                    self.on_private_message(private_message.clone(), act.clone())
-                        .await;
+                    let msg = private_message.clone();
+                    let action = act.clone();
+                    let sf = self.clone();
+                    tokio::spawn(async move {
+                    sf.on_private_message(msg, action).await;
+                    });
                 }
                 let mood_state: AiMoodState;
                 {
