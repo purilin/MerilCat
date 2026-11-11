@@ -11,7 +11,7 @@
         ```
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
         ```
-*  启动
+*  启动 哎呀 乱写的 都没写完 别看惹>_<
     ```
     git clone https://github.com/purilin/MerilCat.git
     cd MerilCat
